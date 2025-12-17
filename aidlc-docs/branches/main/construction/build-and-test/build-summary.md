@@ -28,6 +28,9 @@
 | `/api/sessions/:id` | GET | ✅ 200 | ~2ms |
 | `/api/sessions/:id` | PUT | ✅ 200 | - |
 | `/api/sessions/:id` | DELETE | ✅ 200 | - |
+| `/api/sessions/:id/messages` | DELETE | ✅ 200 | - |
+| `/api/sessions/:id/stats` | GET | ✅ 200 | - |
+
 | `/api/chat/stream` | POST | ✅ 200 | ~1.2s |
 
 ### Frontend UI Tests
@@ -58,6 +61,17 @@
 |-------|----------|--------|
 | Font 's' character missing | Low | UI only, font loading |
 | No AI response in test | Expected | Using test credentials |
+
+## Features Added (Post-Initial Build)
+
+| Feature | Version | Description |
+|---------|---------|-------------|
+| Error Display | Fix #2 | Inline error display with copy button |
+| Trace Viewer | Fix #2 | ChatGPT-like UI with icons and colors |
+| Agent Names | Fix #3 | Display actual agent names (collaborators) |
+| Duration (ms) | Fix #3 | Show execution time for each step |
+| Auto-Summarize | Fix #4 | Auto-summarize at >50k tokens |
+| Clear History | Fix #4 | Manual button to clear all messages |
 
 ---
 
@@ -92,8 +106,11 @@ docker-compose up -d
 |----------|----------|-------------|
 | `AGENT_ID` | ✅ Yes | AWS AgentBedrock Agent ID |
 | `AGENT_ALIAS` | ✅ Yes | AWS AgentBedrock Agent Alias |
+| `AGENT_NAME` | Optional | Display name for main agent (Default: "Main Agent") |
 | `AWS_REGION` | Optional | Default: us-east-1 |
 | `MONGODB_URI` | Optional | Default: mongodb://localhost:27017 |
+| `PORT` | Optional | Backend port (Default: 8081) |
+| `ALLOWED_ORIGINS` | Optional | CORS origins (Default: http://localhost:3000) |
 
 ### AWS Credentials (Choose ONE method)
 

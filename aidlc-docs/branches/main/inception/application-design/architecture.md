@@ -47,34 +47,39 @@ graph TB
     end
     
     subgraph Components
-        CHAT[ChatContainer.vue]
         MSG[MessageList.vue]
-        INPUT[ChatInput.vue]
+        INPUT[Input.vue]
         SIDEBAR[SessionSidebar.vue]
         TRACE[TraceViewer.vue]
         STEPS[AgentSteps.vue]
+        ERROR[ErrorDisplay.vue]
         THEME[ThemeToggle.vue]
     end
     
     subgraph Composables
         USE_CHAT[useChat.ts]
-        USE_SSE[useSSE.ts]
         USE_SESSION[useSession.ts]
         USE_THEME[useTheme.ts]
     end
     
-    INDEX --> CHAT
+    INDEX --> MSG
+    INDEX --> INPUT
     INDEX --> SIDEBAR
-    CHAT --> MSG
-    CHAT --> INPUT
-    CHAT --> STEPS
     MSG --> TRACE
+    MSG --> STEPS
+    MSG --> ERROR
     
-    CHAT --> USE_CHAT
-    USE_CHAT --> USE_SSE
+    INDEX --> USE_CHAT
+    USE_CHAT --> USE_SESSION
     SIDEBAR --> USE_SESSION
     THEME --> USE_THEME
 ```
+
+**Key Features:**
+- **Auto-Summarize**: Automatically summarizes long conversations (>50k tokens)
+- **Clear History**: Manual button to clear all messages in a session
+- **Error Display**: Shows errors inline with copy button for troubleshooting
+- **Trace Viewer**: ChatGPT-like UI with agent names and duration (ms)
 
 ### 2.2 Backend Components (Golang)
 
@@ -88,6 +93,7 @@ graph TB
     subgraph Services
         AGENT_SVC[AgentService]
         SESSION_SVC[SessionService]
+        SUMMARIZE_SVC[SummarizeService]
     end
     
     subgraph Repository
@@ -95,13 +101,17 @@ graph TB
     end
     
     subgraph External
-        BEDROCK[BedrockClient]
+        BEDROCK_AGENT[BedrockAgentRuntime]
+        BEDROCK_RT[BedrockRuntime]
         MONGO[(MongoDB)]
     end
     
     CHAT_H --> AGENT_SVC
+    CHAT_H --> SESSION_SVC
+    CHAT_H --> SUMMARIZE_SVC
     SESSION_H --> SESSION_SVC
-    AGENT_SVC --> BEDROCK
+    AGENT_SVC --> BEDROCK_AGENT
+    SUMMARIZE_SVC --> BEDROCK_RT
     SESSION_SVC --> SESSION_REPO
     SESSION_REPO --> MONGO
 ```
@@ -146,8 +156,15 @@ type Trace struct {
 type AgentStep struct {
     StepIndex   int       `bson:"step_index" json:"stepIndex"`
     AgentName   string    `bson:"agent_name" json:"agentName"`
+    AgentID     string    `bson:"agent_id,omitempty" json:"agentId,omitempty"`
+    Type        string    `bson:"type,omitempty" json:"type,omitempty"` // "thinking" | "action" | "kb" | "collaborator" | "finalizing"
     Action      string    `bson:"action" json:"action"`
     Status      string    `bson:"status" json:"status"` // "running" | "success" | "error"
+    Rationale   string    `bson:"rationale,omitempty" json:"rationale,omitempty"`
+    Observation string    `bson:"observation,omitempty" json:"observation,omitempty"`
+    Input       string    `bson:"input,omitempty" json:"input,omitempty"`
+    Output      string    `bson:"output,omitempty" json:"output,omitempty"`
+    Duration    int64     `bson:"duration,omitempty" json:"duration,omitempty"` // Duration in milliseconds
     StartTime   time.Time `bson:"start_time" json:"startTime"`
     EndTime     time.Time `bson:"end_time,omitempty" json:"endTime,omitempty"`
 }
@@ -173,6 +190,8 @@ type ErrorInfo struct {
 | GET | `/api/sessions/:id` | Get session with messages | - | `{session, messages}` |
 | DELETE | `/api/sessions/:id` | Delete session | - | `{success}` |
 | PUT | `/api/sessions/:id` | Update session title | `{title}` | `Session` |
+| DELETE | `/api/sessions/:id/messages` | Clear all messages | - | `{success, message}` |
+| GET | `/api/sessions/:id/stats` | Get message count | - | `{message_count}` |
 
 ### 4.2 SSE Streaming Endpoint
 
@@ -193,14 +212,17 @@ type ErrorInfo struct {
 event: thinking
 data: {"status": "thinking"}
 
+event: summarized
+data: {"message": "Conversation history was automatically summarized..."}
+
 event: agent_step
-data: {"stepIndex": 1, "agentName": "Researcher", "status": "running"}
+data: {"stepIndex": 1, "agentName": "Researcher", "action": "invoke_model", "status": "running", "duration": 1234}
 
 event: content
 data: {"chunk": "Hello, "}
 
 event: agent_step
-data: {"stepIndex": 1, "agentName": "Researcher", "status": "success"}
+data: {"stepIndex": 1, "agentName": "Researcher", "action": "invoke_model", "status": "success", "duration": 2345}
 
 event: trace
 data: {"traceId": "xxx", "agentSteps": [...]}
@@ -212,6 +234,14 @@ event: done
 data: {"messageId": "xxx"}
 ```
 
+**Auto-Summarize Flow:**
+1. Before sending message, estimate token count (~4 chars/token)
+2. If estimated tokens > 50,000:
+   - Use Claude 3 Haiku to summarize older messages
+   - Keep summary + 4 most recent messages
+   - Send `summarized` event to notify frontend
+3. Continue with reduced context
+
 ---
 
 ## 5. Directory Structure
@@ -222,18 +252,17 @@ ui-agentbedrock/
 │   ├── app/
 │   │   ├── components/
 │   │   │   ├── chat/
-│   │   │   │   ├── ChatContainer.vue
 │   │   │   │   ├── MessageList.vue
-│   │   │   │   ├── ChatInput.vue
+│   │   │   │   ├── Input.vue
 │   │   │   │   ├── AgentSteps.vue
-│   │   │   │   └── TraceViewer.vue
+│   │   │   │   ├── TraceViewer.vue
+│   │   │   │   └── ErrorDisplay.vue
 │   │   │   ├── sidebar/
 │   │   │   │   └── SessionSidebar.vue
 │   │   │   └── ui/
 │   │   │       └── ThemeToggle.vue
 │   │   ├── composables/
 │   │   │   ├── useChat.ts
-│   │   │   ├── useSSE.ts
 │   │   │   ├── useSession.ts
 │   │   │   └── useTheme.ts
 │   │   ├── pages/
@@ -252,7 +281,8 @@ ui-agentbedrock/
 │   │   │   └── session.go
 │   │   ├── services/
 │   │   │   ├── agent.go
-│   │   │   └── session.go
+│   │   │   ├── session.go
+│   │   │   └── summarize.go    # NEW: Auto-summarize service
 │   │   ├── repository/
 │   │   │   └── session.go
 │   │   ├── models/

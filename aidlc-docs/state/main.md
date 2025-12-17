@@ -3,7 +3,7 @@
 **Project**: UI AgentBedrock Test Interface
 **Branch**: main
 **Created**: 2025-12-17
-**Last Updated**: 2025-12-17T07:29:00Z
+**Last Updated**: 2025-12-17T09:30:00Z
 
 ---
 
@@ -35,6 +35,8 @@ Provide an easy-to-use Chat UI for AgentBedrock agents as an alternative to the 
 - Authentication: Not required (initial version)
 - Theme: Dark / Light / System (auto-detect)
 - Session: Stored in MongoDB
+- Auto-Summarize: Automatically summarizes long conversations
+- Clear History: Manual button to clear conversation history
 
 ---
 
@@ -79,4 +81,7 @@ Provide an easy-to-use Chat UI for AgentBedrock agents as an alternative to the 
 ## Fix Cycles
 
 - **Fix #1**: 2025-12-17T07:29:00Z - Docker build error (npm ci → npm install)
+- **Fix #2**: 2025-12-17T08:30:00Z - Error display in chat, trace ordering (ChatGPT-like)
+- **Fix #3**: 2025-12-17T09:00:00Z - Display agent names in trace, add duration (ms)
+- **Fix #4**: 2025-12-17T09:30:00Z - Context window management (Auto-Summarize + Clear History)
 

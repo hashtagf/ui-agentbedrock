@@ -50,9 +50,16 @@ func (s *SummarizeService) SummarizeConversation(ctx context.Context, messages [
 	// Build conversation text
 	var conversationParts []string
 	for _, msg := range messages {
-		role := strings.Title(msg.Role)
-		if msg.Role == "assistant" {
+		var role string
+		switch msg.Role {
+		case "user":
+			role = "User"
+		case "assistant":
 			role = "AI"
+		case "system":
+			role = "System"
+		default:
+			role = msg.Role
 		}
 		conversationParts = append(conversationParts, fmt.Sprintf("%s: %s", role, msg.Content))
 	}

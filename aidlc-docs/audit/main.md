@@ -168,3 +168,74 @@ deploy - docker-compose
 
 ---
 
+## Fix Cycle #2 - Error Display & Trace Improvements
+**Timestamp**: 2025-12-17T08:30:00Z
+**Branch**: main
+**User Input**: 
+```
+ควรเอา error ออกมาแสดงที่ chat เลย พร้อมปุ่ม copy จะได้ troubleshooting ได้ง่าย
+ลำดับควร เรียง เหมือน chatgpt และมี detail ด้วย
+```
+**AI Response**: Implemented error display in chat with copy button, redesigned trace viewer like ChatGPT
+**Changes**:
+- Created `ChatErrorDisplay.vue` component with copy/dismiss buttons
+- Redesigned `ChatTraceViewer.vue` with ChatGPT-like UI
+- Added icons and colors for different step types
+- Made trace input/output collapsible
+
+---
+
+## Fix Cycle #3 - Agent Names & Duration Display
+**Timestamp**: 2025-12-17T09:00:00Z
+**Branch**: main
+**User Input**: 
+```
+/aidlc update execution trace ให้อยู่บน คำตอบสิ ตอนนี้อยู่ข้างใต้ และอยากให้เพิ่ม ms ด้วยว่าทำนานแค่ไหน
+อยากให้แสดงชื่อ agent name ด้วย ว่าใครทำอะไร
+```
+**AI Response**: Moved trace above response, added duration (ms), display actual agent names
+**Changes**:
+- Moved `ChatTraceViewer` above message content in `MessageList.vue`
+- Added `duration` field to `AgentStep` model
+- Enhanced backend `agent.go` to extract collaborator names from trace
+- Added `AGENT_NAME` config for main agent display name
+- Display duration for each step and total duration in header
+
+---
+
+## Fix Cycle #4 - Context Window Management (Auto-Summarize)
+**Timestamp**: 2025-12-17T09:30:00Z
+**Branch**: main
+**User Input**: 
+```
+/aidlc Fix Error : Input is too long for requested model. (Service: BedrockRuntime, Status Code: 400)
+ควรเพิ่ม feature summarize และไปต่อ auto
+```
+**AI Response**: Implemented Auto-Summarize and Clear History features
+**Changes**:
+
+**Backend:**
+- Created `services/summarize.go` - Uses Bedrock Runtime (Claude 3 Haiku) for summarization
+- Added `ClearMessages`, `GetMessageCount`, `GetRecentMessages`, `DeleteOldMessages` to repository
+- Added `ClearMessages`, `SummarizeAndClearOld` to session service
+- Added auto-summarize logic in `handlers/chat.go` (triggers at ~50k tokens)
+- Added new API endpoints:
+  - `DELETE /api/sessions/:id/messages` - Clear all messages
+  - `GET /api/sessions/:id/stats` - Get message count
+- Added `bedrockruntime` package to go.mod
+
+**Frontend:**
+- Added `wasSummarized` state and `clearHistory()` to `useChat.ts`
+- Added `clearMessages()` to `useSession.ts`
+- Added Clear History button (trash icon) in header with confirmation modal
+- Added Summarization Notice banner when auto-summarize occurs
+- Handles `summarized` SSE event from backend
+
+**Flow:**
+1. Before sending message, estimate token count
+2. If > 50,000 tokens, use Claude 3 Haiku to summarize older messages
+3. Keep summary + 4 most recent messages
+4. Send `summarized` SSE event to notify frontend
+5. Continue conversation with reduced context
+
+---
