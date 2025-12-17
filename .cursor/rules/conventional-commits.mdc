@@ -1,0 +1,102 @@
+---
+description: Generate Git commit messages following Conventional Commits specification
+alwaysApply: false
+---
+# Conventional Commits - Git Commit Message Convention
+
+When generating Git commit messages, ALWAYS follow the Conventional Commits specification v1.0.0.
+
+## Format
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+## Commit Types
+
+Use these types for commits:
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `feat` | A new feature (correlates with MINOR in SemVer) | `feat(auth): add OAuth2 login support` |
+| `fix` | A bug fix (correlates with PATCH in SemVer) | `fix(parser): handle null values correctly` |
+| `docs` | Documentation only changes | `docs: update API documentation` |
+| `style` | Code style changes (formatting, semicolons, etc.) | `style: fix indentation in utils` |
+| `refactor` | Code change that neither fixes a bug nor adds a feature | `refactor: extract validation logic` |
+| `perf` | Performance improvements | `perf(db): optimize query performance` |
+| `test` | Adding missing tests or correcting existing tests | `test: add unit tests for auth service` |
+| `build` | Changes to build system or external dependencies | `build: update webpack config` |
+| `ci` | Changes to CI configuration files and scripts | `ci: add GitHub Actions workflow` |
+| `chore` | Other changes that don't modify src or test files | `chore: update dependencies` |
+| `revert` | Reverts a previous commit | `revert: revert "feat(auth): add OAuth2"` |
+
+## Rules
+
+1. **Type**: MUST be lowercase
+2. **Scope**: OPTIONAL, describes section of codebase in parentheses, e.g., `fix(parser):`
+3. **Description**: MUST immediately follow colon and space after type/scope
+4. **Description**: Use imperative mood ("add" not "added" or "adds")
+5. **Description**: Do not capitalize first letter
+6. **Description**: No period at the end
+7. **Body**: OPTIONAL, provides additional context, separated by blank line
+8. **Footer**: OPTIONAL, for breaking changes or issue references
+
+## Breaking Changes
+
+For breaking changes, either:
+- Add `!` after type/scope: `feat(api)!: change response format`
+- Add `BREAKING CHANGE:` in footer
+
+## Examples
+
+### Simple commit
+```
+feat: add user authentication
+```
+
+### Commit with scope
+```
+fix(auth): resolve token expiration issue
+```
+
+### Commit with body
+```
+feat(api): add rate limiting
+
+Implement rate limiting to prevent abuse.
+Limits set to 100 requests per minute per user.
+```
+
+### Commit with breaking change
+```
+feat(api)!: change response format
+
+BREAKING CHANGE: API responses now use camelCase instead of snake_case
+```
+
+### Commit with issue reference
+```
+fix(login): prevent duplicate submissions
+
+Closes #123
+```
+
+## Thai Language Support
+
+For teams preferring Thai descriptions, you MAY use Thai in the description:
+```
+feat(auth): เพิ่มระบบ login ด้วย OAuth2
+fix(parser): แก้ไขปัญหา null value
+```
+
+However, the type and scope MUST remain in English.
+
+## Commit Message Length Guidelines
+
+- **Subject line**: Keep under 50 characters (hard limit: 72)
+- **Body**: Wrap at 72 characters
+- **Be concise but descriptive**
