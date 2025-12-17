@@ -157,3 +157,45 @@ func (s *SessionService) SummarizeAndClearOld(ctx context.Context, sessionID str
 
 	return summaryMessage, nil
 }
+
+// RotateAgentSession creates a new AgentBedrock session and stores the summary context
+// This is needed because AgentBedrock maintains its own conversation history
+func (s *SessionService) RotateAgentSession(ctx context.Context, sessionID string, summaryContext string) (string, error) {
+	objectID, err := primitive.ObjectIDFromHex(sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	return s.repo.RotateAgentSession(ctx, objectID, summaryContext)
+}
+
+// ClearSummaryContext clears the summary context after it's been applied
+func (s *SessionService) ClearSummaryContext(ctx context.Context, sessionID string) error {
+	objectID, err := primitive.ObjectIDFromHex(sessionID)
+	if err != nil {
+		return err
+	}
+
+	return s.repo.ClearSummaryContext(ctx, objectID)
+}
+
+// GetAgentSessionID returns the AgentBedrock session ID for a session
+func (s *SessionService) GetAgentSessionID(ctx context.Context, sessionID string) (string, string, error) {
+	objectID, err := primitive.ObjectIDFromHex(sessionID)
+	if err != nil {
+		return "", "", err
+	}
+
+	session, err := s.repo.GetSession(ctx, objectID)
+	if err != nil {
+		return "", "", err
+	}
+
+	// If no AgentSessionID exists yet, use MongoDB ID
+	agentSessionID := session.AgentSessionID
+	if agentSessionID == "" {
+		agentSessionID = sessionID
+	}
+
+	return agentSessionID, session.SummaryContext, nil
+}

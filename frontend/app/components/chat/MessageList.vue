@@ -64,10 +64,10 @@ const formatTime = (dateStr: string) => {
             <Icon name="lucide:sparkles" class="w-4 h-4 text-blue-400" />
           </div>
           <div class="flex-1">
-            <h4 class="font-medium text-blue-400 mb-1">Conversation Summarized</h4>
+            <h4 class="font-medium text-blue-400 mb-1">Context Window Optimized</h4>
             <p class="text-sm text-[var(--color-text-secondary)]">
-              Previous messages were automatically summarized to reduce context length. 
-              The AI retains the key context from your earlier conversation.
+              The conversation was automatically summarized to avoid token limits. 
+              A new agent session was created with the summarized context, so you can continue seamlessly.
             </p>
           </div>
           <button 

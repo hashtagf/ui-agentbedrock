@@ -49,6 +49,13 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 		log.Printf("Warning: Could not get session messages: %v", err)
 	}
 
+	// Get the AgentBedrock session ID (separate from MongoDB session ID)
+	agentSessionID, summaryContext, err := h.sessionService.GetAgentSessionID(ctx, req.SessionID)
+	if err != nil {
+		log.Printf("Warning: Could not get agent session ID: %v", err)
+		agentSessionID = req.SessionID // Fallback to MongoDB ID
+	}
+
 	// Check if we need to auto-summarize
 	estimatedTokens := services.EstimateTokens(messages)
 	summarized := false
@@ -64,13 +71,21 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 		if err != nil {
 			log.Printf("Warning: Failed to summarize: %v", err)
 		} else {
-			// Save summary and clear old messages
+			// Save summary and clear old messages in MongoDB
 			_, err = h.sessionService.SummarizeAndClearOld(ctx, req.SessionID, summary, int64(KeepRecentMessages))
 			if err != nil {
 				log.Printf("Warning: Failed to save summary: %v", err)
 			} else {
-				summarized = true
-				log.Printf("Conversation summarized successfully")
+				// CRITICAL: Rotate AgentBedrock session to reset its internal history
+				newAgentSessionID, err := h.sessionService.RotateAgentSession(ctx, req.SessionID, summary)
+				if err != nil {
+					log.Printf("Warning: Failed to rotate agent session: %v", err)
+				} else {
+					agentSessionID = newAgentSessionID
+					summaryContext = summary
+					summarized = true
+					log.Printf("Conversation summarized and agent session rotated: %s", agentSessionID)
+				}
 			}
 		}
 	}
@@ -80,6 +95,16 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save message"})
 		return
+	}
+
+	// Prepare the message to send to AgentBedrock
+	messageToSend := req.Message
+	if summaryContext != "" {
+		// Prepend summary context for the new AgentBedrock session
+		messageToSend = fmt.Sprintf("[Previous Conversation Context]\n%s\n\n[Current Message]\n%s", summaryContext, req.Message)
+		// Clear the summary context after using it
+		h.sessionService.ClearSummaryContext(ctx, req.SessionID)
+		log.Printf("Applied summary context to new agent session")
 	}
 
 	// Set SSE headers
@@ -116,14 +141,16 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 	// Notify client if summarization happened
 	if summarized {
 		summarizeData, _ := json.Marshal(map[string]interface{}{
-			"message": "Conversation history was automatically summarized to reduce context length",
+			"message":        "Conversation history was automatically summarized to reduce context length",
+			"newSessionId":   agentSessionID,
+			"sessionRotated": true,
 		})
 		fmt.Fprintf(c.Writer, "event: summarized\ndata: %s\n\n", string(summarizeData))
 		flusher.Flush()
 	}
 
-	// Invoke agent with streaming
-	trace, content, err := h.agentService.InvokeAgentStream(c.Request.Context(), req.SessionID, req.Message, callback)
+	// Invoke agent with streaming - use AgentBedrock session ID, not MongoDB ID
+	trace, content, err := h.agentService.InvokeAgentStream(c.Request.Context(), agentSessionID, messageToSend, callback)
 
 	// Save assistant message
 	var assistantMessage *models.Message

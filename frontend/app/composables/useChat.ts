@@ -131,9 +131,10 @@ export function useChat() {
               } else if (data.type !== undefined && data.message !== undefined && data.type !== 'StreamError') {
                 // error event
                 currentError.value = data
-              } else if (data.message !== undefined && !data.type) {
-                // summarized event
+              } else if (data.sessionRotated !== undefined || (data.message !== undefined && !data.type && !data.messageId)) {
+                // summarized event - session was rotated due to context length
                 wasSummarized.value = true
+                console.log('Session rotated due to auto-summarize:', data.newSessionId || 'unknown')
               } else if (data.messageId !== undefined) {
                 // done event
                 thinkingStatus.value = null

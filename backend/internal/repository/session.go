@@ -25,11 +25,17 @@ func NewSessionRepository(db *mongo.Database) *SessionRepository {
 
 func (r *SessionRepository) CreateSession(ctx context.Context, session *models.Session) error {
 	session.ID = primitive.NewObjectID()
+	session.AgentSessionID = generateAgentSessionID()
 	session.CreatedAt = time.Now()
 	session.UpdatedAt = time.Now()
 
 	_, err := r.sessions.InsertOne(ctx, session)
 	return err
+}
+
+// generateAgentSessionID creates a unique session ID for AgentBedrock
+func generateAgentSessionID() string {
+	return primitive.NewObjectID().Hex()
 }
 
 func (r *SessionRepository) GetSessions(ctx context.Context) ([]models.Session, error) {
@@ -191,5 +197,42 @@ func (r *SessionRepository) DeleteOldMessages(ctx context.Context, sessionID pri
 		"session_id": sessionID,
 		"_id":        bson.M{"$nin": keepIDs},
 	})
+	return err
+}
+
+// RotateAgentSession generates a new AgentBedrock session ID and stores context
+func (r *SessionRepository) RotateAgentSession(ctx context.Context, sessionID primitive.ObjectID, summaryContext string) (string, error) {
+	newAgentSessionID := generateAgentSessionID()
+
+	_, err := r.sessions.UpdateOne(
+		ctx,
+		bson.M{"_id": sessionID},
+		bson.M{
+			"$set": bson.M{
+				"agent_session_id": newAgentSessionID,
+				"summary_context":  summaryContext,
+				"updated_at":       time.Now(),
+			},
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return newAgentSessionID, nil
+}
+
+// ClearSummaryContext clears the summary context after it's been used
+func (r *SessionRepository) ClearSummaryContext(ctx context.Context, sessionID primitive.ObjectID) error {
+	_, err := r.sessions.UpdateOne(
+		ctx,
+		bson.M{"_id": sessionID},
+		bson.M{
+			"$set": bson.M{
+				"summary_context": "",
+				"updated_at":      time.Now(),
+			},
+		},
+	)
 	return err
 }

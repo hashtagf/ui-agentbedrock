@@ -84,4 +84,5 @@ Provide an easy-to-use Chat UI for AgentBedrock agents as an alternative to the 
 - **Fix #2**: 2025-12-17T08:30:00Z - Error display in chat, trace ordering (ChatGPT-like)
 - **Fix #3**: 2025-12-17T09:00:00Z - Display agent names in trace, add duration (ms)
 - **Fix #4**: 2025-12-17T09:30:00Z - Context window management (Auto-Summarize + Clear History)
+- **Fix #5**: 2025-12-17T10:00:00Z - AgentBedrock session rotation on auto-summarize (fix Input too long error)
 

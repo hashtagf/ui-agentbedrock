@@ -239,3 +239,27 @@ deploy - docker-compose
 5. Continue conversation with reduced context
 
 ---
+
+## Fix Cycle #5 - AgentBedrock Session Rotation for Auto-Summarize
+**Timestamp**: 2025-12-17T10:00:00Z
+**Branch**: main
+**User Input**: 
+```
+/aidlc add feature DataReader
+→
+Input is too long for requested model. (Service: BedrockRuntime, Status Code: 400, Request ID: 7abc6ed6-1089-4b3c-b080-fb70faa3deb5) - Conversation history using the bulk of prompt input tokens
+
+Auto-Summarize ของ collab ดว้ย 
+```
+**Issue Identified**: 
+- Auto-Summarize only clears MongoDB storage, NOT AgentBedrock's internal session memory
+- AgentBedrock maintains conversation history per SessionId on AWS side
+- Need to rotate AgentBedrock session when summarizing
+
+**Solution**:
+1. Add `agentSessionID` field to Session model (separate from MongoDB ID)
+2. When auto-summarize triggers, generate new AgentBedrock session ID
+3. Pass summary context in the first message to new AgentBedrock session
+4. Update frontend to handle session rotation notification
+
+---
