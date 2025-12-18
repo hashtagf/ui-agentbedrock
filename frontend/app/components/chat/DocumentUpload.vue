@@ -71,6 +71,9 @@ const getFileTypeIcon = (fileType: string) => {
     case 'txt':
     case 'md':
       return 'lucide:file-code'
+    case 'xlsx':
+    case 'xls':
+      return 'lucide:file-spreadsheet'
     default:
       return 'lucide:file'
   }
@@ -88,7 +91,7 @@ watch(uploadError, (error) => {
     <input
       ref="fileInputRef"
       type="file"
-      accept=".pdf,.docx,.doc,.txt,.md"
+      accept=".pdf,.docx,.doc,.txt,.md,.xlsx,.xls"
       multiple
       class="hidden"
       :disabled="disabled"
@@ -120,7 +123,7 @@ watch(uploadError, (error) => {
           <span class="text-[var(--color-text-muted)]"> or drag and drop</span>
         </div>
         <p class="text-xs text-[var(--color-text-muted)]">
-          PDF, DOCX, DOC, TXT, MD (max 10MB)
+          PDF, DOCX, DOC, TXT, MD, XLSX, XLS (max 10MB)
         </p>
       </div>
     </div>

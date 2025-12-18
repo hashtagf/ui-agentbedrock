@@ -25,6 +25,15 @@ var allowedMimeTypes = map[string]string{
 	"application/msword": "doc",
 	"text/plain":         "txt",
 	"text/markdown":      "md",
+	// Excel formats - handled differently (presigned S3 upload)
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+	"application/vnd.ms-excel": "xls",
+}
+
+// ExcelMimeTypes for files that should be uploaded to S3 instead of GridFS
+var ExcelMimeTypes = map[string]bool{
+	"xlsx": true,
+	"xls":  true,
 }
 
 type UploadHandler struct {
@@ -101,9 +110,13 @@ func (h *UploadHandler) UploadFile(c *gin.Context) {
 			fileType = "txt"
 		case ".md":
 			fileType = "md"
+		case ".xlsx":
+			fileType = "xlsx"
+		case ".xls":
+			fileType = "xls"
 		default:
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("unsupported file type: %s. Allowed types: PDF, DOCX, DOC, TXT, MD", mimeType),
+				"error": fmt.Sprintf("unsupported file type: %s. Allowed types: PDF, DOCX, DOC, TXT, MD, XLSX, XLS", mimeType),
 			})
 			return
 		}
@@ -243,7 +256,16 @@ func getMimeType(fileType string) string {
 		return "text/plain"
 	case "md":
 		return "text/markdown"
+	case "xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case "xls":
+		return "application/vnd.ms-excel"
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// IsExcelFile checks if the file type is an Excel file
+func IsExcelFile(fileType string) bool {
+	return ExcelMimeTypes[fileType]
 }

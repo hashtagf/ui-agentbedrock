@@ -5,26 +5,28 @@ import (
 )
 
 type Config struct {
-	Port           string
-	MongoDBURI     string
-	DatabaseName   string
-	AgentID        string
-	AgentAliasID   string
-	AgentName      string // Display name for the main agent
-	AWSRegion      string
-	AllowedOrigins string
+	Port               string
+	MongoDBURI         string
+	DatabaseName       string
+	AgentID            string
+	AgentAliasID       string
+	AgentName          string // Display name for the main agent
+	AWSRegion          string
+	AllowedOrigins     string
+	LambdaFunctionName string // MCP Gateway Lambda for Excel presigned URLs
 }
 
 func Load() *Config {
 	return &Config{
-		Port:           getEnv("PORT", "8080"),
-		MongoDBURI:     getEnv("MONGODB_URI", "mongodb://localhost:27017"),
-		DatabaseName:   getEnv("DATABASE_NAME", "agentbedrock"),
-		AgentID:        getEnv("AGENT_ID", ""),
-		AgentAliasID:   getEnv("AGENT_ALIAS", ""),
-		AgentName:      getEnv("AGENT_NAME", "Main Agent"),
-		AWSRegion:      getEnv("AWS_REGION", "us-east-1"),
-		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		Port:               getEnv("PORT", "8080"),
+		MongoDBURI:         getEnv("MONGODB_URI", "mongodb://localhost:27017"),
+		DatabaseName:       getEnv("DATABASE_NAME", "agentbedrock"),
+		AgentID:            getEnv("AGENT_ID", ""),
+		AgentAliasID:       getEnv("AGENT_ALIAS", ""),
+		AgentName:          getEnv("AGENT_NAME", "Main Agent"),
+		AWSRegion:          getEnv("AWS_REGION", "us-east-1"),
+		AllowedOrigins:     getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		LambdaFunctionName: getEnv("LAMBDA_FUNCTION_NAME", ""), // Optional: for Excel file uploads
 	}
 }
 

@@ -62,6 +62,15 @@ func main() {
 	chatHandler := handlers.NewChatHandler(agentService, sessionService, summarizeService, documentRepo)
 	uploadHandler := handlers.NewUploadHandler(documentRepo, extractService)
 
+	// Initialize Excel handler (optional - only if Lambda is configured)
+	var excelHandler *handlers.ExcelHandler
+	if cfg.LambdaFunctionName != "" {
+		excelHandler = handlers.NewExcelHandler(agentService.GetAWSConfig(), cfg.LambdaFunctionName, documentRepo)
+		log.Printf("Excel upload enabled via Lambda: %s", cfg.LambdaFunctionName)
+	} else {
+		log.Println("Excel upload disabled (LAMBDA_FUNCTION_NAME not set)")
+	}
+
 	// Setup Gin router
 	r := gin.Default()
 
@@ -101,6 +110,12 @@ func main() {
 		api.GET("/files/:id", uploadHandler.DownloadFile)
 		api.DELETE("/files/:id", uploadHandler.DeleteFile)
 		api.GET("/sessions/:id/documents", uploadHandler.GetSessionDocuments)
+
+		// Excel upload routes (presigned S3 upload)
+		if excelHandler != nil {
+			api.POST("/excel/presign", excelHandler.GetPresignedURL)
+			api.POST("/excel/confirm/:id", excelHandler.ConfirmExcelUpload)
+		}
 	}
 
 	// Start server

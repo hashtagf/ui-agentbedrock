@@ -42,6 +42,8 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_PROFILE=${AWS_PROFILE:-}
       - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000,http://localhost:8081
+      # Excel upload via Lambda
+      - LAMBDA_FUNCTION_NAME=${LAMBDA_FUNCTION_NAME:-}
     volumes:
       # Mount AWS credentials from host (optional - for local development)
       - ~/.aws:/root/.aws:ro

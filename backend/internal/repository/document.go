@@ -156,3 +156,26 @@ func (r *DocumentRepository) UpdateDocumentContent(ctx context.Context, id primi
 	)
 	return err
 }
+
+// CreateDocument creates a document record without file content (for S3 uploads)
+func (r *DocumentRepository) CreateDocument(ctx context.Context, doc *models.Document) error {
+	doc.ID = primitive.NewObjectID()
+	doc.CreatedAt = time.Now()
+	doc.Confirmed = false
+
+	_, err := r.documents.InsertOne(ctx, doc)
+	return err
+}
+
+// ConfirmS3Upload updates a document after successful S3 upload
+func (r *DocumentRepository) ConfirmS3Upload(ctx context.Context, id primitive.ObjectID, fileSize int64) error {
+	_, err := r.documents.UpdateOne(
+		ctx,
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{
+			"file_size": fileSize,
+			"confirmed": true,
+		}},
+	)
+	return err
+}

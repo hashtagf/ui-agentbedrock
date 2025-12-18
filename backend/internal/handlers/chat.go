@@ -115,6 +115,7 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 
 	// Get document content if document IDs are provided
 	documentContext := ""
+	excelContext := ""
 	if len(req.DocumentIDs) > 0 {
 		docIDs := make([]primitive.ObjectID, 0, len(req.DocumentIDs))
 		for _, docIDStr := range req.DocumentIDs {
@@ -131,15 +132,24 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 			if err != nil {
 				log.Printf("Warning: Failed to get documents: %v", err)
 			} else {
-				// Combine all document content
+				// Separate Excel files from other documents
 				var docContents []string
+				var excelFiles []string
 				for _, doc := range documents {
-					if doc.Content != "" {
+					// Check if this is an Excel file (stored in S3)
+					if doc.StorageType == "s3" && doc.S3Key != "" {
+						// Format for agent: [Excel File: filename, Key: s3_key]
+						excelFiles = append(excelFiles, fmt.Sprintf("[Excel File: %s, Key: %s]", doc.Filename, doc.S3Key))
+					} else if doc.Content != "" {
+						// Regular documents with extracted content
 						docContents = append(docContents, fmt.Sprintf("[Document: %s]\n%s", doc.Filename, doc.Content))
 					}
 				}
 				if len(docContents) > 0 {
 					documentContext = strings.Join(docContents, "\n\n")
+				}
+				if len(excelFiles) > 0 {
+					excelContext = strings.Join(excelFiles, "\n")
 				}
 			}
 		}
@@ -147,8 +157,15 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 
 	// Prepare the message to send to AgentBedrock
 	messageToSend := req.Message
+
+	// Add Excel file context (agent will read from S3)
+	if excelContext != "" {
+		messageToSend = fmt.Sprintf("%s\n\n%s", excelContext, messageToSend)
+	}
+
+	// Add regular document context (already extracted text)
 	if documentContext != "" {
-		messageToSend = fmt.Sprintf("[Document Context]\n%s\n\n[User Message]\n%s", documentContext, req.Message)
+		messageToSend = fmt.Sprintf("[Document Context]\n%s\n\n[User Message]\n%s", documentContext, messageToSend)
 	}
 	if summaryContext != "" {
 		// Prepend summary context for the new AgentBedrock session
