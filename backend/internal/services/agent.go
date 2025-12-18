@@ -57,6 +57,7 @@ func (s *AgentService) InvokeAgentStream(ctx context.Context, sessionID, message
 	}
 
 	var fullContent string
+	var finalResponseFromTrace string // Capture final response from trace if no content chunks
 	stepIndex := 0
 
 	// Send thinking event
@@ -114,7 +115,13 @@ func (s *AgentService) InvokeAgentStream(ctx context.Context, sessionID, message
 					agentName = *v.Value.CollaboratorName
 				}
 
-				step := s.parseTraceToStep(stepIndex, v.Value.Trace, startTime, agentName)
+				step, traceResponse := s.parseTraceToStepWithResponse(stepIndex, v.Value.Trace, startTime, agentName)
+
+				// Capture final response from trace (for multi-agent collaboration)
+				if traceResponse != "" {
+					finalResponseFromTrace = traceResponse
+				}
+
 				if step.Action != "" { // Only add non-empty steps
 					trace.AgentSteps = append(trace.AgentSteps, step)
 
@@ -147,6 +154,16 @@ func (s *AgentService) InvokeAgentStream(ctx context.Context, sessionID, message
 		}
 	}
 
+	// If no content chunks were received but we have a final response from trace,
+	// use that as the content (common in multi-agent collaboration)
+	if fullContent == "" && finalResponseFromTrace != "" {
+		fullContent = finalResponseFromTrace
+		callback(models.SSEEvent{
+			Event: "content",
+			Data:  models.ContentEvent{Chunk: fullContent},
+		})
+	}
+
 	// Send final agent step status
 	for _, step := range trace.AgentSteps {
 		callback(models.SSEEvent{
@@ -177,8 +194,21 @@ func toJSON(v interface{}) string {
 	return string(b)
 }
 
-// parseTraceToStep extracts detailed information from AWS Bedrock trace
+// parseTraceToStepWithResponse extracts detailed information from AWS Bedrock trace
+// Returns both the step and any final response text found in the trace
+func (s *AgentService) parseTraceToStepWithResponse(stepIndex int, trace types.Trace, startTime time.Time, defaultAgentName string) (models.AgentStep, string) {
+	step, finalResponse := s.parseTraceToStepInternal(stepIndex, trace, startTime, defaultAgentName)
+	return step, finalResponse
+}
+
+// parseTraceToStep extracts detailed information from AWS Bedrock trace (legacy method)
 func (s *AgentService) parseTraceToStep(stepIndex int, trace types.Trace, startTime time.Time, defaultAgentName string) models.AgentStep {
+	step, _ := s.parseTraceToStepInternal(stepIndex, trace, startTime, defaultAgentName)
+	return step
+}
+
+// parseTraceToStepInternal is the internal implementation that returns step and final response
+func (s *AgentService) parseTraceToStepInternal(stepIndex int, trace types.Trace, startTime time.Time, defaultAgentName string) (models.AgentStep, string) {
 	step := models.AgentStep{
 		StepIndex: stepIndex,
 		AgentName: defaultAgentName, // Use passed agent name (may come from trace)
@@ -190,6 +220,8 @@ func (s *AgentService) parseTraceToStep(stepIndex int, trace types.Trace, startT
 		EndTime:   time.Now(),
 	}
 	step.Duration = step.EndTime.Sub(step.StartTime).Milliseconds()
+
+	var finalResponse string
 
 	// Use type switch to handle the Trace interface (outer level)
 	switch t := trace.(type) {
@@ -204,7 +236,7 @@ func (s *AgentService) parseTraceToStep(stepIndex int, trace types.Trace, startT
 		step.Type = "orchestration"
 		// Keep main agent name - will be updated if it's a collaborator call
 		// OrchestrationTrace is also an interface - parse inner value
-		s.parseOrchestrationTrace(&step, t.Value)
+		finalResponse = s.parseOrchestrationTraceWithResponse(&step, t.Value)
 
 	case *types.TraceMemberPostProcessingTrace:
 		step.Type = "post_processing"
@@ -224,7 +256,7 @@ func (s *AgentService) parseTraceToStep(stepIndex int, trace types.Trace, startT
 		step.Action = "Content check"
 	}
 
-	return step
+	return step, finalResponse
 }
 
 func (s *AgentService) parsePreProcessingTrace(step *models.AgentStep, trace types.PreProcessingTrace) {
@@ -241,6 +273,13 @@ func (s *AgentService) parsePreProcessingTrace(step *models.AgentStep, trace typ
 }
 
 func (s *AgentService) parseOrchestrationTrace(step *models.AgentStep, trace types.OrchestrationTrace) {
+	s.parseOrchestrationTraceWithResponse(step, trace)
+}
+
+// parseOrchestrationTraceWithResponse parses orchestration trace and returns final response if found
+func (s *AgentService) parseOrchestrationTraceWithResponse(step *models.AgentStep, trace types.OrchestrationTrace) string {
+	var finalResponse string
+
 	switch t := trace.(type) {
 	case *types.OrchestrationTraceMemberModelInvocationInput:
 		if t.Value.Text != nil {
@@ -337,15 +376,19 @@ func (s *AgentService) parseOrchestrationTrace(step *models.AgentStep, trace typ
 			step.Output = truncateString(*obs.ActionGroupInvocationOutput.Text, 500)
 		}
 
-		// Handle Final Response
+		// Handle Final Response - capture full text for multi-agent collaboration
 		if obs.FinalResponse != nil && obs.FinalResponse.Text != nil {
 			step.Action = "Final response"
 			step.Output = truncateString(*obs.FinalResponse.Text, 200)
+			// Return the full final response (not truncated) for content streaming
+			finalResponse = *obs.FinalResponse.Text
 		}
 
 	case *types.OrchestrationTraceMemberModelInvocationOutput:
 		step.Action = "Response generated"
 	}
+
+	return finalResponse
 }
 
 func (s *AgentService) parsePostProcessingTrace(step *models.AgentStep, trace types.PostProcessingTrace) {
