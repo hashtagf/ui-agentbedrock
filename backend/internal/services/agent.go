@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -162,6 +163,18 @@ func (s *AgentService) InvokeAgentStream(ctx context.Context, sessionID, message
 			Event: "content",
 			Data:  models.ContentEvent{Chunk: fullContent},
 		})
+	}
+
+	// Fallback: If still no content but we have successful trace steps,
+	// generate a summary from the last collaborator output
+	if fullContent == "" && len(trace.AgentSteps) > 0 {
+		fullContent = s.generateFallbackResponse(trace.AgentSteps)
+		if fullContent != "" {
+			callback(models.SSEEvent{
+				Event: "content",
+				Data:  models.ContentEvent{Chunk: fullContent},
+			})
+		}
 	}
 
 	// Send final agent step status
@@ -405,4 +418,63 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// generateFallbackResponse creates a response when the agent completes without sending one
+// This happens in multi-agent collaboration when the orchestrator doesn't generate a final response
+func (s *AgentService) generateFallbackResponse(steps []models.AgentStep) string {
+	if len(steps) == 0 {
+		return ""
+	}
+
+	// Find the last collaborator response or action output
+	var lastCollaboratorName string
+	var lastOutput string
+	var actionsSummary []string
+
+	for i := len(steps) - 1; i >= 0; i-- {
+		step := steps[i]
+
+		// Capture action completions
+		if step.Type == "action" && step.Action == "Completed" && step.Output != "" {
+			actionsSummary = append(actionsSummary, fmt.Sprintf("- %s: completed", step.AgentName))
+		}
+
+		// Look for collaborator responses
+		if step.Type == "collaborator" && step.Action == "Response" && step.Output != "" {
+			lastCollaboratorName = step.AgentName
+			lastOutput = step.Output
+			break
+		}
+
+		// Also check for collaborator completions with output
+		if step.Type == "collaborator" && step.Output != "" && lastOutput == "" {
+			lastCollaboratorName = step.AgentName
+			lastOutput = step.Output
+		}
+	}
+
+	// Generate fallback based on what we found
+	if lastOutput != "" {
+		// Truncate if too long
+		if len(lastOutput) > 2000 {
+			lastOutput = lastOutput[:2000] + "..."
+		}
+		return fmt.Sprintf("✅ %s ดำเนินการเสร็จสิ้น\n\n%s",
+			lastCollaboratorName, lastOutput)
+	}
+
+	// If we only have action summaries
+	if len(actionsSummary) > 0 {
+		return fmt.Sprintf("✅ ดำเนินการเสร็จสิ้น\n\n%s",
+			strings.Join(actionsSummary, "\n"))
+	}
+
+	// Last resort: just indicate completion
+	lastStep := steps[len(steps)-1]
+	if lastStep.Status == "success" {
+		return "✅ ดำเนินการเสร็จสิ้น"
+	}
+
+	return ""
 }
