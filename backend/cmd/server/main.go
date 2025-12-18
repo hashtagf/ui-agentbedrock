@@ -46,6 +46,7 @@ func main() {
 
 	// Initialize repositories
 	sessionRepo := repository.NewSessionRepository(db)
+	documentRepo := repository.NewDocumentRepository(db)
 
 	// Initialize services
 	sessionService := services.NewSessionService(sessionRepo)
@@ -54,10 +55,12 @@ func main() {
 		log.Fatalf("Failed to initialize agent service: %v", err)
 	}
 	summarizeService := services.NewSummarizeService(agentService.GetAWSConfig())
+	extractService := services.NewExtractionService()
 
 	// Initialize handlers
 	sessionHandler := handlers.NewSessionHandler(sessionService)
-	chatHandler := handlers.NewChatHandler(agentService, sessionService, summarizeService)
+	chatHandler := handlers.NewChatHandler(agentService, sessionService, summarizeService, documentRepo)
+	uploadHandler := handlers.NewUploadHandler(documentRepo, extractService)
 
 	// Setup Gin router
 	r := gin.Default()
@@ -92,6 +95,12 @@ func main() {
 
 		// Chat routes
 		api.POST("/chat/stream", chatHandler.StreamChat)
+
+		// Document upload routes
+		api.POST("/upload", uploadHandler.UploadFile)
+		api.GET("/files/:id", uploadHandler.DownloadFile)
+		api.DELETE("/files/:id", uploadHandler.DeleteFile)
+		api.GET("/sessions/:id/documents", uploadHandler.GetSessionDocuments)
 	}
 
 	// Start server

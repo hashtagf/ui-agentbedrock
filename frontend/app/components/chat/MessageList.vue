@@ -5,6 +5,7 @@ interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  documents?: string[] // Document IDs
   trace?: any
   createdAt: string
 }
@@ -89,6 +90,15 @@ const formatTime = (dateStr: string) => {
       <!-- User Message -->
       <div v-if="message.role === 'user'" class="flex justify-end">
         <div class="max-w-[85%] lg:max-w-[70%]">
+          <!-- Documents indicator -->
+          <div v-if="message.documents && message.documents.length > 0" class="mb-2 flex justify-end">
+            <div class="flex items-center gap-1 px-2 py-1 bg-[var(--color-bg-tertiary)] rounded-lg border border-[var(--color-border)]">
+              <Icon name="lucide:paperclip" class="w-3 h-3 text-[var(--color-text-muted)]" />
+              <span class="text-xs text-[var(--color-text-muted)]">
+                {{ message.documents.length }} document{{ message.documents.length > 1 ? 's' : '' }} attached
+              </span>
+            </div>
+          </div>
           <div class="message-user rounded-2xl rounded-tr-md px-4 py-3">
             <p class="text-[var(--color-text-primary)] whitespace-pre-wrap">{{ message.content }}</p>
           </div>

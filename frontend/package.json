@@ -20,11 +20,12 @@
   },
   "devDependencies": {
     "@nuxtjs/tailwindcss": "^6.12.2",
+    "@playwright/test": "^1.57.0",
     "@types/markdown-it": "^14.1.2",
     "autoprefixer": "^10.4.20",
+    "playwright": "^1.57.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.6.3"
   }
 }
-

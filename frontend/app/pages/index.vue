@@ -146,6 +146,7 @@ watch(messages, () => {
           <ChatInput
             :disabled="!currentSession"
             :is-streaming="isStreaming"
+            :session-id="currentSession?.id"
             @send="sendMessage"
             @stop="stopStream"
           />

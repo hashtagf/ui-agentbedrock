@@ -250,6 +250,7 @@ func (s *AgentService) parseOrchestrationTrace(step *models.AgentStep, trace typ
 
 	case *types.OrchestrationTraceMemberRationale:
 		if t.Value.Text != nil {
+			// Don't truncate rationale - show full thinking process
 			step.Rationale = *t.Value.Text
 		}
 		step.Action = "Thinking"
@@ -267,7 +268,8 @@ func (s *AgentService) parseOrchestrationTrace(step *models.AgentStep, trace typ
 			}
 			step.Action = "Calling"
 			if collab.Input != nil && collab.Input.Text != nil {
-				step.Input = truncateString(*collab.Input.Text, 500)
+				// Don't truncate collaborator input - show full conversation
+				step.Input = *collab.Input.Text
 			}
 		}
 
@@ -313,7 +315,8 @@ func (s *AgentService) parseOrchestrationTrace(step *models.AgentStep, trace typ
 			}
 			step.Action = "Response"
 			if collab.Output != nil && collab.Output.Text != nil {
-				step.Output = truncateString(*collab.Output.Text, 500)
+				// Don't truncate collaborator output - show full conversation
+				step.Output = *collab.Output.Text
 			}
 		}
 

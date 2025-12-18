@@ -74,6 +74,10 @@ func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 }
 
 func (s *SessionService) SaveMessage(ctx context.Context, sessionID string, role, content string, trace *models.Trace) (*models.Message, error) {
+	return s.SaveMessageWithDocuments(ctx, sessionID, role, content, nil, trace)
+}
+
+func (s *SessionService) SaveMessageWithDocuments(ctx context.Context, sessionID string, role, content string, documents []primitive.ObjectID, trace *models.Trace) (*models.Message, error) {
 	objectID, err := primitive.ObjectIDFromHex(sessionID)
 	if err != nil {
 		return nil, err
@@ -83,6 +87,7 @@ func (s *SessionService) SaveMessage(ctx context.Context, sessionID string, role
 		SessionID: objectID,
 		Role:      role,
 		Content:   content,
+		Documents: documents,
 		Trace:     trace,
 	}
 

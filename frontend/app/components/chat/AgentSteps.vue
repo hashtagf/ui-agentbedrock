@@ -19,6 +19,21 @@ interface Props {
 
 defineProps<Props>()
 
+const expandedSteps = ref<Set<number>>(new Set())
+
+const toggleStep = (index: number) => {
+  if (expandedSteps.value.has(index)) {
+    expandedSteps.value.delete(index)
+  } else {
+    expandedSteps.value.add(index)
+  }
+  expandedSteps.value = new Set(expandedSteps.value)
+}
+
+const hasDetails = (step: AgentStep) => {
+  return step.rationale || step.observation || step.input || step.output
+}
+
 const getStepDisplay = (step: AgentStep) => {
   // Default display
   let icon = '⚙️'
@@ -95,12 +110,16 @@ const formatDuration = (duration?: number) => {
 <template>
   <div class="space-y-2 py-2">
     <div 
-      v-for="step in steps" 
+      v-for="(step, index) in steps" 
       :key="step.stepIndex"
-      class="animate-fade-in"
+      class="animate-fade-in group"
     >
       <!-- Step Row -->
-      <div class="flex items-start gap-2">
+      <div 
+        class="flex items-start gap-2 cursor-pointer hover:bg-[var(--color-bg-tertiary)]/30 rounded-lg p-2 -m-2 transition-colors"
+        :class="{ 'cursor-pointer': hasDetails(step) }"
+        @click="hasDetails(step) && toggleStep(index)"
+      >
         <!-- Icon -->
         <span class="text-base flex-shrink-0">{{ getStepDisplay(step).icon }}</span>
 
@@ -149,13 +168,29 @@ const formatDuration = (duration?: number) => {
             {{ getStepDisplay(step).sublabel }}
           </p>
 
-          <!-- Rationale Preview -->
+          <!-- Rationale Preview (collapsed) -->
           <p 
-            v-if="step.rationale" 
+            v-if="step.rationale && !expandedSteps.has(index)" 
             class="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2"
           >
             {{ step.rationale }}
           </p>
+
+          <!-- Input Preview (for collaborator calls - collapsed) -->
+          <div 
+            v-if="step.type === 'collaborator' && step.input && !expandedSteps.has(index)" 
+            class="mt-1 text-xs text-[var(--color-text-muted)] bg-[var(--color-bg-tertiary)] px-2 py-1 rounded line-clamp-2"
+          >
+            <span class="font-medium">📤 Request:</span> {{ step.input.length > 150 ? step.input.substring(0, 150) + '...' : step.input }}
+          </div>
+
+          <!-- Output Preview (for collaborator responses - collapsed) -->
+          <div 
+            v-if="step.type === 'collaborator' && step.output && !expandedSteps.has(index)" 
+            class="mt-1 text-xs text-[var(--color-text-muted)] bg-[var(--color-bg-tertiary)] px-2 py-1 rounded line-clamp-2"
+          >
+            <span class="font-medium">📥 Response:</span> {{ step.output.length > 150 ? step.output.substring(0, 150) + '...' : step.output }}
+          </div>
 
           <!-- Action Call -->
           <div 
@@ -164,6 +199,43 @@ const formatDuration = (duration?: number) => {
           >
             {{ step.action }}(...)
           </div>
+        </div>
+
+        <!-- Expand Arrow -->
+        <Icon 
+          v-if="hasDetails(step)"
+          :name="expandedSteps.has(index) ? 'lucide:chevron-up' : 'lucide:chevron-down'" 
+          class="w-4 h-4 text-[var(--color-text-muted)] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+        />
+      </div>
+
+      <!-- Expanded Details -->
+      <div 
+        v-if="expandedSteps.has(index) && hasDetails(step)" 
+        class="ml-6 mt-2 space-y-2"
+      >
+        <!-- Full Rationale -->
+        <div v-if="step.rationale" class="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+          <p class="text-xs font-medium text-purple-400 mb-1">💭 Thinking:</p>
+          <p class="text-sm text-[var(--color-text-primary)] whitespace-pre-wrap">{{ step.rationale }}</p>
+        </div>
+
+        <!-- Input (for collaborator calls) -->
+        <div v-if="step.input" class="space-y-1">
+          <span class="text-xs font-medium text-[var(--color-text-muted)]">📤 Input:</span>
+          <pre class="p-2 rounded-lg bg-[var(--color-bg-tertiary)] text-xs overflow-x-auto font-mono text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-40 overflow-y-auto">{{ step.input }}</pre>
+        </div>
+
+        <!-- Observation -->
+        <div v-if="step.observation" class="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+          <p class="text-xs font-medium text-cyan-400 mb-1">👁️ Observation:</p>
+          <p class="text-sm text-[var(--color-text-primary)]">{{ step.observation }}</p>
+        </div>
+
+        <!-- Output (for collaborator responses) -->
+        <div v-if="step.output" class="space-y-1">
+          <span class="text-xs font-medium text-green-400">📥 Output:</span>
+          <pre class="p-2 rounded-lg bg-[var(--color-bg-tertiary)] text-xs overflow-x-auto font-mono text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-60 overflow-y-auto">{{ step.output }}</pre>
         </div>
       </div>
     </div>

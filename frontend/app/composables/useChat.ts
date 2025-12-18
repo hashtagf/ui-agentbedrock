@@ -17,6 +17,7 @@ interface Message {
   sessionId: string
   role: 'user' | 'assistant'
   content: string
+  documents?: string[] // Document IDs
   trace?: any
   createdAt: string
 }
@@ -34,8 +35,11 @@ export function useChat() {
   const abortController = useState<AbortController | null>('abortController', () => null)
   const wasSummarized = useState<boolean>('wasSummarized', () => false)
 
+  const { getDocumentIds } = useDocumentUpload()
+
   const sendMessage = async (content: string) => {
-    if (!currentSession.value || isStreaming.value || !content.trim()) return
+    if (!currentSession.value || isStreaming.value) return
+    if (!content.trim() && getDocumentIds().length === 0) return
 
     // Reset state
     thinkingStatus.value = null
@@ -43,12 +47,16 @@ export function useChat() {
     currentError.value = null
     wasSummarized.value = false
 
+    // Get document IDs
+    const documentIds = getDocumentIds()
+
     // Add user message
     const userMessage: Message = {
       id: `temp-${Date.now()}`,
       sessionId: currentSession.value.id,
       role: 'user',
-      content: content.trim(),
+      content: content.trim() || (documentIds.length > 0 ? '[Document attached]' : ''),
+      documents: documentIds,
       createdAt: new Date().toISOString(),
     }
     addMessage(userMessage)
@@ -73,7 +81,8 @@ export function useChat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: currentSession.value.id,
-          message: content.trim(),
+          message: content.trim() || '',
+          documentIds: documentIds.length > 0 ? documentIds : undefined,
         }),
         signal: abortController.value.signal,
       })

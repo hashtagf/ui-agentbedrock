@@ -6,16 +6,21 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ui-agentbedrock/backend/internal/models"
+	"github.com/ui-agentbedrock/backend/internal/repository"
 	"github.com/ui-agentbedrock/backend/internal/services"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
 	// MaxTokenEstimate is the estimated max tokens before auto-summarization
-	// Claude models typically have 100k-200k context, but agent calls add overhead
-	MaxTokenEstimate = 50000
+	// Claude 3 models (Sonnet, Haiku) have 200k context window
+	// We use 80% threshold (160k) but account for agent call overhead (~40k)
+	// So we trigger at ~120k tokens (80% of usable 150k context)
+	MaxTokenEstimate = 120000
 	// KeepRecentMessages is the number of recent messages to keep after summarization
 	KeepRecentMessages = 4
 )
@@ -24,13 +29,15 @@ type ChatHandler struct {
 	agentService     *services.AgentService
 	sessionService   *services.SessionService
 	summarizeService *services.SummarizeService
+	documentRepo     *repository.DocumentRepository
 }
 
-func NewChatHandler(agentService *services.AgentService, sessionService *services.SessionService, summarizeService *services.SummarizeService) *ChatHandler {
+func NewChatHandler(agentService *services.AgentService, sessionService *services.SessionService, summarizeService *services.SummarizeService, documentRepo *repository.DocumentRepository) *ChatHandler {
 	return &ChatHandler{
 		agentService:     agentService,
 		sessionService:   sessionService,
 		summarizeService: summarizeService,
+		documentRepo:     documentRepo,
 	}
 }
 
@@ -90,21 +97,74 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 		}
 	}
 
-	// Save user message
-	_, err = h.sessionService.SaveMessage(ctx, req.SessionID, "user", req.Message, nil)
+	// Convert document IDs to ObjectIDs for saving
+	docObjectIDs := make([]primitive.ObjectID, 0, len(req.DocumentIDs))
+	for _, docIDStr := range req.DocumentIDs {
+		docID, err := primitive.ObjectIDFromHex(docIDStr)
+		if err == nil {
+			docObjectIDs = append(docObjectIDs, docID)
+		}
+	}
+
+	// Save user message with document IDs
+	_, err = h.sessionService.SaveMessageWithDocuments(ctx, req.SessionID, "user", req.Message, docObjectIDs, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save message"})
 		return
 	}
 
+	// Get document content if document IDs are provided
+	documentContext := ""
+	if len(req.DocumentIDs) > 0 {
+		docIDs := make([]primitive.ObjectID, 0, len(req.DocumentIDs))
+		for _, docIDStr := range req.DocumentIDs {
+			docID, err := primitive.ObjectIDFromHex(docIDStr)
+			if err != nil {
+				log.Printf("Warning: Invalid document ID: %s", docIDStr)
+				continue
+			}
+			docIDs = append(docIDs, docID)
+		}
+
+		if len(docIDs) > 0 {
+			documents, err := h.documentRepo.GetDocumentsByIDs(ctx, docIDs)
+			if err != nil {
+				log.Printf("Warning: Failed to get documents: %v", err)
+			} else {
+				// Combine all document content
+				var docContents []string
+				for _, doc := range documents {
+					if doc.Content != "" {
+						docContents = append(docContents, fmt.Sprintf("[Document: %s]\n%s", doc.Filename, doc.Content))
+					}
+				}
+				if len(docContents) > 0 {
+					documentContext = strings.Join(docContents, "\n\n")
+				}
+			}
+		}
+	}
+
 	// Prepare the message to send to AgentBedrock
 	messageToSend := req.Message
+	if documentContext != "" {
+		messageToSend = fmt.Sprintf("[Document Context]\n%s\n\n[User Message]\n%s", documentContext, req.Message)
+	}
 	if summaryContext != "" {
 		// Prepend summary context for the new AgentBedrock session
+		// Keep sending summary context until we have enough new messages to replace it
+		// Only clear summary context when we have accumulated enough new conversation (e.g., 10+ messages)
+		messageCount, _ := h.sessionService.GetMessageCount(ctx, req.SessionID)
 		messageToSend = fmt.Sprintf("[Previous Conversation Context]\n%s\n\n[Current Message]\n%s", summaryContext, req.Message)
-		// Clear the summary context after using it
-		h.sessionService.ClearSummaryContext(ctx, req.SessionID)
-		log.Printf("Applied summary context to new agent session")
+
+		// Only clear summary context after accumulating enough new messages (10+ messages after summarization)
+		// This ensures AI maintains context from the summary
+		if messageCount >= 10 {
+			h.sessionService.ClearSummaryContext(ctx, req.SessionID)
+			log.Printf("Cleared summary context after accumulating %d messages", messageCount)
+		} else {
+			log.Printf("Applied summary context to agent session (message count: %d)", messageCount)
+		}
 	}
 
 	// Set SSE headers
