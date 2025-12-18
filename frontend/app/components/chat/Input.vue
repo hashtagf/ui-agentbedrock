@@ -66,15 +66,17 @@ watch(message, () => {
 
 <template>
   <div class="relative">
-    <!-- Document Upload Area -->
-    <div v-if="showUpload" class="mb-3 p-4 bg-[var(--color-bg-tertiary)] border border-dashed border-[var(--color-border)] rounded-xl">
-      <DocumentUpload :session-id="sessionId || ''" :disabled="disabled" />
-    </div>
-
-    <!-- Document List -->
-    <div v-if="uploadedDocuments && uploadedDocuments.length > 0" class="mb-2">
-      <DocumentList :documents="uploadedDocuments" @remove="removeDocument" />
-    </div>
+    <!-- Document Upload Area & Document List -->
+    <ClientOnly>
+      <div v-show="showUpload" aria-label="Document Upload Area" class="mb-3 p-4 bg-[var(--color-bg-tertiary)] border border-dashed border-[var(--color-border)] rounded-xl">
+        <ChatDocumentUpload :session-id="sessionId || ''" :disabled="disabled" />
+      </div>
+      
+      <!-- Document List -->
+      <div v-if="uploadedDocuments && uploadedDocuments.length > 0" class="mb-2">
+        <ChatDocumentList :documents="uploadedDocuments" @remove="removeDocument" />
+      </div>
+    </ClientOnly>
 
     <div class="relative flex items-end gap-2 p-2 rounded-2xl bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] focus-within:ring-2 focus-within:ring-accent-primary/50 focus-within:border-accent-primary transition-all">
       <!-- Paperclip Button -->
