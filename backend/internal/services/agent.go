@@ -427,13 +427,20 @@ func (s *AgentService) generateFallbackResponse(steps []models.AgentStep) string
 		return ""
 	}
 
-	// Find the last collaborator response or action output
+	// Track which agents were called in the workflow
+	// Expected workflow: DataReader → Analyzer → Auditor → Reporter
+	agentsCalled := make(map[string]bool)
 	var lastCollaboratorName string
 	var lastOutput string
 	var actionsSummary []string
 
 	for i := len(steps) - 1; i >= 0; i-- {
 		step := steps[i]
+
+		// Track which collaborators were called
+		if step.Type == "collaborator" {
+			agentsCalled[step.AgentName] = true
+		}
 
 		// Capture action completions
 		if step.Type == "action" && step.Action == "Completed" && step.Output != "" {
@@ -442,9 +449,10 @@ func (s *AgentService) generateFallbackResponse(steps []models.AgentStep) string
 
 		// Look for collaborator responses
 		if step.Type == "collaborator" && step.Action == "Response" && step.Output != "" {
-			lastCollaboratorName = step.AgentName
-			lastOutput = step.Output
-			break
+			if lastCollaboratorName == "" {
+				lastCollaboratorName = step.AgentName
+				lastOutput = step.Output
+			}
 		}
 
 		// Also check for collaborator completions with output
@@ -454,26 +462,43 @@ func (s *AgentService) generateFallbackResponse(steps []models.AgentStep) string
 		}
 	}
 
-	// Generate fallback based on what we found
+	// Check if workflow is complete (Reporter was called = final step)
+	workflowComplete := agentsCalled["Reporter"]
+
+	// Determine workflow status message
+	var statusPrefix string
+	if workflowComplete {
+		statusPrefix = "✅ Audit complete"
+	} else if agentsCalled["Auditor"] {
+		statusPrefix = "⏳ Workflow stopped at Auditor (waiting for Reporter)"
+	} else if agentsCalled["Analyzer"] {
+		statusPrefix = "⏳ Workflow stopped at Analyzer (waiting for Auditor)"
+	} else if agentsCalled["DataReader"] {
+		statusPrefix = "⏳ Workflow stopped at DataReader (waiting for Analyzer)"
+	} else {
+		statusPrefix = "⚠️ No agents were called"
+	}
+
+	// Generate response based on what we found
 	if lastOutput != "" {
 		// Truncate if too long
 		if len(lastOutput) > 2000 {
 			lastOutput = lastOutput[:2000] + "..."
 		}
-		return fmt.Sprintf("✅ %s ดำเนินการเสร็จสิ้น\n\n%s",
-			lastCollaboratorName, lastOutput)
+		return fmt.Sprintf("%s\n\nLast response from %s:\n%s",
+			statusPrefix, lastCollaboratorName, lastOutput)
 	}
 
 	// If we only have action summaries
 	if len(actionsSummary) > 0 {
-		return fmt.Sprintf("✅ ดำเนินการเสร็จสิ้น\n\n%s",
-			strings.Join(actionsSummary, "\n"))
+		return fmt.Sprintf("%s\n\n%s",
+			statusPrefix, strings.Join(actionsSummary, "\n"))
 	}
 
-	// Last resort: just indicate completion
+	// Last resort
 	lastStep := steps[len(steps)-1]
 	if lastStep.Status == "success" {
-		return "✅ ดำเนินการเสร็จสิ้น"
+		return statusPrefix
 	}
 
 	return ""
